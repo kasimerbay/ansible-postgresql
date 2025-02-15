@@ -1,0 +1,90 @@
+- name: Install packages
+  ansible.builtin.yum:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - postgresql
+    - postgresql-server
+    - python-pip
+    - postgresql-contrib
+
+- name: Install Python packages
+  pip:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - psycopg2-binary
+
+- name: Install PostgreSQL
+  ansible.builtin.yum:
+    name: postgresql-server
+    state: present
+    enablerepo: postgresql:{{ postgresql_version }}
+
+- name: "Find out if PostgreSQL is initialized"
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/data/pg_hba.conf"
+  register: postgres_data
+
+- name: "Initialize PostgreSQL"
+  ansible.builtin.shell: "postgresql-setup --initdb"
+  when: not postgres_data.stat.exists
+
+- name: Start PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Replace pg_hba.conf
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/var/lib/pgsql/data/{{ item }}"
+    owner: postgres
+    group: postgres
+    mode: u+rw,g+rx,o+rx
+    backup: yes
+  loop:
+    - pg_hba.conf
+    - postgresql.conf
+
+- name: Restart PostgreSQL Service
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+
+- name: Create {{ postgresql_db_user }} user with SCRAM-hashed password
+  community.postgresql.postgresql_user:
+    name: "{{ postgresql_db_user }}"
+    password: "{{ postgresql_db_password }}"
+  environment:
+    PGOPTIONS: "-c password_encryption=scram-sha-256"
+
+- name: Create a new database with name {{ postgresql_db_name }} other specifications
+  community.postgresql.postgresql_db:
+    name: "{{ postgresql_db_name }}"
+    encoding: "{{ postgresql_db_encoding}}"
+    owner: "{{ postgresql_db_user}}"
+
+- name: Grant all privileges on database {{ postgresql_db_name }} to user {{ postgresql_db_user }}
+  community.postgresql.postgresql_privs:
+    database: "{{ postgresql_db_name }}"
+    privs: ALL
+    type: database
+    role: "{{ postgresql_db_user }}"
+
+- name: Replace pg_hba.conf
+  ansible.builtin.template:
+    src: "{{ item }}_2.j2"
+    dest: "/var/lib/pgsql/data/{{ item }}"
+    owner: postgres
+    group: postgres
+    mode: u+rw,g+rx,o+rx
+    backup: yes
+  loop:
+    - pg_hba.conf
+
+- name: Restart PostgreSQL Service
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
