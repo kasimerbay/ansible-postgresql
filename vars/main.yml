@@ -1,7 +1,7 @@
 postgresql_version: 15
-postgresql_db_user: artifactory_owner
-postgresql_db_password: artifactory_password
-postgresql_db_encoding: UTF8
-postgresql_db_name: artifactory_db
-postgresql_db_host: localhost
 postgresql_db_port: 5432
+postgresql_db_encoding: UTF8
+postgresql_db_host: localhost
+postgresql_db_user: "{{ application_name }}_owner"
+postgresql_db_name: "{{ application_name }}_db"
+postgresql_db_password: "{{ application_name }}"
